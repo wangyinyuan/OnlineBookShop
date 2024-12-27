@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,59 +10,51 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-interface Order {
-  id: number;
-  date: string;
-  total: number;
-  status: string;
-}
+import { Loader } from "@/app/components/Loader";
+import { useToast } from "@/hooks/use-toast";
+import useSWR from "swr";
+import { getOrdersPath, getOrdersReq } from "@/apis/order";
 
 export function OrderList() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const { data, isLoading } = useSWR(getOrdersPath, () => getOrdersReq());
+  const { toast } = useToast();
 
-  useEffect(() => {
-    // 在实际应用中，这里应该从API获取订单数据
-    const mockOrders: Order[] = [
-      { id: 1, date: "2023-06-01", total: 29.97, status: "Delivered" },
-      { id: 2, date: "2023-06-15", total: 49.98, status: "Processing" },
-      { id: 3, date: "2023-06-30", total: 19.99, status: "Shipped" },
-    ];
-    setOrders(mockOrders);
-  }, []);
+  if (isLoading) {
+    return <Loader />;
+  }
+
+  const orders = data || [];
 
   return (
     <div>
-      {orders.length === 0 ? (
-        <p className="text-center text-xl">You have no orders yet.</p>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Order ID</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Total</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Actions</TableHead>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Order ID</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead>Total</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {orders.map((order: any) => (
+            <TableRow key={order.order_id}>
+              <TableCell>{order.order_id}</TableCell>
+              <TableCell>
+                {new Date(order.order_date).toLocaleDateString()}
+              </TableCell>
+              <TableCell>${parseFloat(order.total).toFixed(2)}</TableCell>
+              <TableCell>{order.status}</TableCell>
+              <TableCell>
+                <Link href={`/orders/${order.order_id}`}>
+                  <Button variant="outline">View Details</Button>
+                </Link>
+              </TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {orders.map((order) => (
-              <TableRow key={order.id}>
-                <TableCell>{order.id}</TableCell>
-                <TableCell>{order.date}</TableCell>
-                <TableCell>${order.total.toFixed(2)}</TableCell>
-                <TableCell>{order.status}</TableCell>
-                <TableCell>
-                  <Link href={`/orders/${order.id}`}>
-                    <Button variant="outline">View Details</Button>
-                  </Link>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

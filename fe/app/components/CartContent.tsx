@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,8 +21,11 @@ import {
   updateCartReq,
 } from "@/apis/cart";
 import { Loader } from "@/app/components/Loader";
+import { createOrderReq } from "@/apis/order";
+import { useRouter } from "next/navigation";
 
 export function CartContent() {
+  const router = useRouter();
   const { data, isLoading, mutate } = useSWR(getCartsPath, () => getCartsReq());
   const { toast } = useToast();
 
@@ -44,8 +46,19 @@ export function CartContent() {
       description: "Item removed from cart",
     });
   };
+
   const calculateTotal = () => {
     return data.total || 0;
+  };
+
+  const handleCheckout = async () => {
+    const response = await createOrderReq();
+    toast({
+      title: "Order placed successfully",
+      description: "Redirecting to order details...",
+    });
+    await mutate();
+    router.push(`/orders/${response.orderId}`);
   };
 
   if (isLoading) {
@@ -107,7 +120,9 @@ export function CartContent() {
         <p className="text-xl font-bold">
           Total: ${calculateTotal().toFixed(2)}
         </p>
-        <Button size="lg">Proceed to Checkout</Button>
+        <Button size="lg" onClick={handleCheckout}>
+          Proceed to Checkout
+        </Button>
       </div>
     </div>
   );
