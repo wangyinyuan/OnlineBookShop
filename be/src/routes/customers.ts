@@ -2,6 +2,8 @@ import express from "express";
 import pool from "../config/database";
 import bcrypt from "bcryptjs";
 import { generateToken, getResResult } from "../utils/api";
+import { auth } from "../middleware/auth";
+import { permission } from "../middleware/permission";
 
 const router = express.Router();
 
@@ -92,6 +94,73 @@ router.post("/login", async (req, res) => {
     );
   } catch (error) {
     res.status(500).json(getResResult(500, "Server error"));
+  }
+});
+
+router.get("/", auth, permission, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(`
+      SELECT 
+        customer_id as id,
+        name,
+        email,
+        credit_level as creditLevel,
+        account_balance as accountBalance
+      FROM Customer
+      WHERE is_admin = false
+    `);
+
+    const mappedData = rows.map((row: any) => {
+      return {
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        creditLevel: row.creditLevel,
+        accountBalance: parseFloat(row.accountBalance),
+      };
+    });
+
+    res.send(getResResult(200, "success", mappedData));
+  } catch (error) {
+    res.status(500).send(getResResult(500, "Server Error"));
+  }
+});
+
+// 更新用户信息，前端可能只传递部分字段，所以需要先查询再更新
+router.put("/:id", auth, permission, async (req, res) => {
+  const { id } = req.params;
+  const { creditLevel, accountBalance } = req.body;
+  const conn = await pool.getConnection();
+
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.execute(
+      "SELECT credit_level, account_balance FROM Customer WHERE customer_id = ?",
+      [id]
+    );
+
+    if (rows.length === 0) {
+      await conn.rollback();
+      return res.status(404).send(getResResult(404, "Customer not found"));
+    }
+
+    const currentData = rows[0];
+
+    const newCreditLevel = creditLevel ?? currentData.credit_level;
+    const newAccountBalance = accountBalance ?? currentData.account_balance;
+
+    await conn.execute(
+      "UPDATE Customer SET credit_level = ?, account_balance = ? WHERE customer_id = ?",
+      [newCreditLevel, newAccountBalance, id]
+    );
+
+    await conn.commit();
+    res.send(getResResult(200, "Customer updated successfully"));
+  } catch (error) {
+    await conn.rollback();
+    res.status(500).send(getResResult(500, "Server Error"));
+  } finally {
+    conn.release();
   }
 });
 

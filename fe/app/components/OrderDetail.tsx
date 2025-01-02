@@ -32,7 +32,6 @@ export function OrderDetail({ orderId }: { orderId: string }) {
     getOrderDetailsPath(parseInt(orderId)),
     () => getOrderDetailsReq(parseInt(orderId))
   );
-  const { toast } = useToast();
 
   if (isLoading) {
     return <Loader />;

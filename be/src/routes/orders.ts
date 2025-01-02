@@ -1,6 +1,7 @@
 import express from "express";
 import pool from "../config/database";
 import { auth } from "../middleware/auth";
+import { permission } from "../middleware/permission";
 import { getResResult } from "../utils/api";
 
 const router = express.Router();
@@ -80,6 +81,43 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
+// 获取所有订单（管理员）
+router.get("/all", auth, permission, async (req, res) => {
+  console.log("get all orders");
+  try {
+    const [orders] = await pool.execute(`
+      SELECT 
+        o.order_id as id,
+        c.name as customerName,
+        DATE_FORMAT(o.order_date, '%Y-%m-%d') as orderDate,
+        o.status,
+        o.shipping_address as shippingAddress,
+        SUM(oi.quantity * oi.price) as totalAmount
+      FROM \`Order\` o
+      JOIN Customer c ON o.customer_id = c.customer_id
+      JOIN Order_Item oi ON o.order_id = oi.order_id
+      GROUP BY 
+        o.order_id,
+        c.name,
+        o.order_date,
+        o.status,
+        o.shipping_address
+      ORDER BY o.order_date DESC
+    `);
+
+    const formattedOrders = (orders as any[]).map((order) => ({
+      ...order,
+      totalAmount: parseFloat(order.totalAmount),
+    }));
+
+    console.log(formattedOrders);
+
+    res.status(200).send(getResResult(200, "success", formattedOrders));
+  } catch (error) {
+    res.status(500).send(getResResult(500, "Server Error"));
+  }
+});
+
 router.get("/:orderId", auth, async (req, res) => {
   const customerId = req.user.id;
   const orderId = parseInt(req.params.orderId);
@@ -117,6 +155,28 @@ router.get("/:orderId", auth, async (req, res) => {
   } catch (error) {
     console.error("Fetch order details error:", error);
     res.status(500).send(getResResult(500, "Failed to fetch order details"));
+  }
+});
+
+// 更新订单状态（管理员）
+router.put("/:orderId/status", auth, permission, async (req, res) => {
+  const { orderId } = req.params;
+  const { status } = req.body;
+  const conn = await pool.getConnection();
+
+  try {
+    await conn.beginTransaction();
+    await conn.execute("UPDATE `Order` SET status = ? WHERE order_id = ?", [
+      status,
+      orderId,
+    ]);
+    await conn.commit();
+    res.send(getResResult(200, "Order status updated successfully"));
+  } catch (error) {
+    await conn.rollback();
+    res.status(500).send(getResResult(500, "Server Error"));
+  } finally {
+    conn.release();
   }
 });
 

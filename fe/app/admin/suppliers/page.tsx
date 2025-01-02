@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,45 +11,60 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-interface Supplier {
-  id: number;
-  name: string;
-  contactInfo: string;
-}
+import { useToast } from "@/hooks/use-toast";
+import {
+  addSupplierReq,
+  getSuppliersReq,
+  suppliersPath,
+  updateSupplierReq,
+} from "@/apis/supplier";
+import useSWR from "swr";
+import { Loader } from "@/app/components/Loader";
 
 export default function SupplierManagement() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const { toast } = useToast();
   const [newSupplier, setNewSupplier] = useState({ name: "", contactInfo: "" });
+  const [tempValues, setTempValues] = useState<
+    Record<
+      number,
+      {
+        name: string;
+        contactInfo: string;
+      }
+    >
+  >({});
 
-  useEffect(() => {
-    // Fetch suppliers from API
-    // For now, we'll use mock data
-    setSuppliers([
-      { id: 1, name: "Supplier A", contactInfo: "supplierA@example.com" },
-      { id: 2, name: "Supplier B", contactInfo: "supplierB@example.com" },
-    ]);
-  }, []);
+  const {
+    data: suppliers,
+    isLoading,
+    mutate,
+  } = useSWR(suppliersPath, () => getSuppliersReq());
 
-  const handleAddSupplier = () => {
-    // Add supplier to API
-    // For now, we'll just add it to the local state
-    setSuppliers([...suppliers, { ...newSupplier, id: suppliers.length + 1 }]);
+  const handleAddSupplier = async () => {
+    await addSupplierReq(newSupplier);
+    toast({ title: "Success", description: "Supplier added successfully!" });
+    mutate();
     setNewSupplier({ name: "", contactInfo: "" });
   };
 
-  const handleUpdateSupplier = (
-    id: number,
-    updatedSupplier: Partial<Supplier>
-  ) => {
-    // Update supplier in API
-    // For now, we'll just update the local state
-    setSuppliers(
-      suppliers.map((supplier) =>
-        supplier.id === id ? { ...supplier, ...updatedSupplier } : supplier
-      )
-    );
+  const handleUpdateSupplier = async (id: number) => {
+    const tempValue = tempValues[id];
+    if (!tempValue) return;
+
+    await updateSupplierReq(id, tempValue);
+    toast({
+      title: "Success",
+      description: "Supplier updated successfully!",
+    });
+    setTempValues((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    mutate();
   };
+
+  if (isLoading) return <Loader />;
 
   return (
     <div className="container mx-auto p-4">
@@ -85,29 +100,42 @@ export default function SupplierManagement() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {suppliers.map((supplier) => (
+          {suppliers?.map((supplier) => (
             <TableRow key={supplier.id}>
               <TableCell>{supplier.name}</TableCell>
               <TableCell>{supplier.contactInfo}</TableCell>
               <TableCell className="flex items-center">
                 <Input
-                  value={supplier.name}
+                  value={tempValues[supplier.id]?.name ?? supplier.name}
                   onChange={(e) =>
-                    handleUpdateSupplier(supplier.id, { name: e.target.value })
+                    setTempValues((prev) => ({
+                      ...prev,
+                      [supplier.id]: {
+                        ...prev[supplier.id],
+                        name: e.target.value,
+                      },
+                    }))
                   }
                   className="mr-2"
                 />
                 <Input
-                  value={supplier.contactInfo}
+                  value={
+                    tempValues[supplier.id]?.contactInfo ?? supplier.contactInfo
+                  }
                   onChange={(e) =>
-                    handleUpdateSupplier(supplier.id, {
-                      contactInfo: e.target.value,
-                    })
+                    setTempValues((prev) => ({
+                      ...prev,
+                      [supplier.id]: {
+                        ...prev[supplier.id],
+                        contactInfo: e.target.value,
+                      },
+                    }))
                   }
                   className="mr-2"
                 />
                 <Button
-                  onClick={() => handleUpdateSupplier(supplier.id, supplier)}>
+                  onClick={() => handleUpdateSupplier(supplier.id)}
+                  disabled={!tempValues[supplier.id]}>
                   Update
                 </Button>
               </TableCell>

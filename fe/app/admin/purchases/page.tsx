@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,63 +11,69 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-interface PurchaseOrder {
-  id: number;
-  supplier: string;
-  book: string;
-  quantity: number;
-  status: string;
-}
+import { useToast } from "@/hooks/use-toast";
+import useSWR from "swr";
+import {
+  createPurchaseOrderReq,
+  getPurchaseOrdersReq,
+  purchaseOrdersPath,
+  updatePurchaseOrderStatusReq,
+} from "@/apis/book";
+import { Loader } from "@/app/components/Loader";
+import { formatDate } from "@/utils";
 
 export default function PurchaseManagement() {
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const { toast } = useToast();
   const [newPurchaseOrder, setNewPurchaseOrder] = useState({
     supplier: "",
     book: "",
     quantity: 0,
   });
+  const [tempStatus, setTempStatus] = useState<Record<number, string>>({});
 
-  useEffect(() => {
-    // Fetch purchase orders from API
-    // For now, we'll use mock data
-    setPurchaseOrders([
-      {
-        id: 1,
-        supplier: "Supplier A",
-        book: "The Great Gatsby",
-        quantity: 100,
-        status: "Pending",
-      },
-      {
-        id: 2,
-        supplier: "Supplier B",
-        book: "To Kill a Mockingbird",
-        quantity: 50,
-        status: "Delivered",
-      },
-    ]);
-  }, []);
+  const {
+    data: purchaseOrders,
+    isLoading,
+    mutate,
+  } = useSWR(purchaseOrdersPath, () => getPurchaseOrdersReq());
 
-  const handleAddPurchaseOrder = () => {
-    // Add purchase order to API
-    // For now, we'll just add it to the local state
-    setPurchaseOrders([
-      ...purchaseOrders,
-      { ...newPurchaseOrder, id: purchaseOrders.length + 1, status: "Pending" },
-    ]);
+  const handleAddPurchaseOrder = async () => {
+    await createPurchaseOrderReq(newPurchaseOrder);
+    toast({ title: "Success", description: "Purchase order created!" });
+    mutate();
     setNewPurchaseOrder({ supplier: "", book: "", quantity: 0 });
   };
 
-  const handleUpdateStatus = (id: number, newStatus: string) => {
-    // Update status in API
-    // For now, we'll just update the local state
-    setPurchaseOrders(
-      purchaseOrders.map((po) =>
-        po.id === id ? { ...po, status: newStatus } : po
-      )
-    );
+  const handleUpdateStatus = async (id: number) => {
+    const newStatus = tempStatus[id];
+    if (
+      !newStatus ||
+      newStatus === purchaseOrders?.find((po) => po.id === id)?.status
+    ) {
+      return;
+    }
+
+    try {
+      await updatePurchaseOrderStatusReq(id, newStatus);
+      toast({ title: "Success", description: "Status updated!" });
+      setTempStatus((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      mutate();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update status",
+        variant: "destructive",
+      });
+    }
   };
+
+  if (isLoading) {
+    return <Loader />;
+  }
 
   return (
     <div className="container mx-auto p-4">
@@ -114,27 +120,40 @@ export default function PurchaseManagement() {
             <TableHead>Supplier</TableHead>
             <TableHead>Book</TableHead>
             <TableHead>Quantity</TableHead>
+            <TableHead>Price</TableHead>
+            <TableHead>Order Date</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {purchaseOrders.map((po) => (
+          {purchaseOrders?.map((po) => (
             <TableRow key={po.id}>
               <TableCell>{po.supplier}</TableCell>
               <TableCell>{po.book}</TableCell>
               <TableCell>{po.quantity}</TableCell>
+              <TableCell>${po.price.toFixed(2)}</TableCell>
+              <TableCell>{formatDate(po.orderDate)}</TableCell>
               <TableCell>{po.status}</TableCell>
-              <TableCell>
+              <TableCell className="flex gap-2">
                 <select
-                  value={po.status}
-                  onChange={(e) => handleUpdateStatus(po.id, e.target.value)}
+                  value={tempStatus[po.id] ?? po.status}
+                  onChange={(e) =>
+                    setTempStatus((prev) => ({
+                      ...prev,
+                      [po.id]: e.target.value,
+                    }))
+                  }
                   className="mr-2 p-2 border rounded">
                   <option value="Pending">Pending</option>
                   <option value="Shipped">Shipped</option>
                   <option value="Delivered">Delivered</option>
                 </select>
-                <Button onClick={() => handleUpdateStatus(po.id, po.status)}>
+                <Button
+                  onClick={() => handleUpdateStatus(po.id)}
+                  disabled={
+                    !tempStatus[po.id] || tempStatus[po.id] === po.status
+                  }>
                   Update
                 </Button>
               </TableCell>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,60 +11,59 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-interface Customer {
-  id: number;
-  name: string;
-  email: string;
-  creditLevel: number;
-  accountBalance: number;
-}
+import { useToast } from "@/hooks/use-toast";
+import useSWR from "swr";
+import {
+  customersPath,
+  getCustomersReq,
+  updateCustomerReq,
+} from "@/apis/customer";
+import { Loader } from "@/app/components/Loader";
 
 export default function CustomerManagement() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-
-  useEffect(() => {
-    // Fetch customers from API
-    // For now, we'll use mock data
-    setCustomers([
+  const { toast } = useToast();
+  const [tempValues, setTempValues] = useState<
+    Record<
+      number,
       {
-        id: 1,
-        name: "John Doe",
-        email: "john@example.com",
-        creditLevel: 3,
-        accountBalance: 500,
-      },
-      {
-        id: 2,
-        name: "Jane Smith",
-        email: "jane@example.com",
-        creditLevel: 2,
-        accountBalance: 200,
-      },
-    ]);
-  }, []);
+        creditLevel: number;
+        accountBalance: number;
+      }
+    >
+  >({});
 
-  const handleUpdateCreditLevel = (id: number, newLevel: number) => {
-    // Update credit level in API
-    // For now, we'll just update the local state
-    setCustomers(
-      customers.map((customer) =>
-        customer.id === id ? { ...customer, creditLevel: newLevel } : customer
-      )
-    );
+  const {
+    data: customers,
+    isLoading,
+    mutate,
+  } = useSWR(customersPath, () => getCustomersReq());
+
+  const handleUpdateCustomer = async (id: number) => {
+    const tempValue = tempValues[id];
+    if (!tempValue) return;
+
+    try {
+      await updateCustomerReq(id, tempValue);
+      toast({
+        title: "Success",
+        description: "Customer updated successfully!",
+      });
+      setTempValues((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      mutate();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update customer",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleUpdateAccountBalance = (id: number, newBalance: number) => {
-    // Update account balance in API
-    // For now, we'll just update the local state
-    setCustomers(
-      customers.map((customer) =>
-        customer.id === id
-          ? { ...customer, accountBalance: newBalance }
-          : customer
-      )
-    );
-  };
+  if (isLoading) return <Loader />;
 
   return (
     <div className="container mx-auto p-4">
@@ -81,7 +80,7 @@ export default function CustomerManagement() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {customers.map((customer) => (
+          {customers?.map((customer) => (
             <TableRow key={customer.id}>
               <TableCell>{customer.name}</TableCell>
               <TableCell>{customer.email}</TableCell>
@@ -90,34 +89,40 @@ export default function CustomerManagement() {
               <TableCell className="flex items-center">
                 <Input
                   type="number"
-                  value={customer.creditLevel}
+                  value={
+                    tempValues[customer.id]?.creditLevel ?? customer.creditLevel
+                  }
                   onChange={(e) =>
-                    handleUpdateCreditLevel(
-                      customer.id,
-                      parseInt(e.target.value)
-                    )
+                    setTempValues((prev) => ({
+                      ...prev,
+                      [customer.id]: {
+                        ...prev[customer.id],
+                        creditLevel: parseInt(e.target.value) || 0,
+                      },
+                    }))
                   }
                   className="w-20 mr-2"
                 />
                 <Input
                   type="number"
-                  value={customer.accountBalance}
+                  value={
+                    tempValues[customer.id]?.accountBalance ??
+                    customer.accountBalance
+                  }
                   onChange={(e) =>
-                    handleUpdateAccountBalance(
-                      customer.id,
-                      parseFloat(e.target.value)
-                    )
+                    setTempValues((prev) => ({
+                      ...prev,
+                      [customer.id]: {
+                        ...prev[customer.id],
+                        accountBalance: parseFloat(e.target.value) || 0,
+                      },
+                    }))
                   }
                   className="w-20 mr-2"
                 />
                 <Button
-                  onClick={() => {
-                    handleUpdateCreditLevel(customer.id, customer.creditLevel);
-                    handleUpdateAccountBalance(
-                      customer.id,
-                      customer.accountBalance
-                    );
-                  }}>
+                  onClick={() => handleUpdateCustomer(customer.id)}
+                  disabled={!tempValues[customer.id]}>
                   Update
                 </Button>
               </TableCell>

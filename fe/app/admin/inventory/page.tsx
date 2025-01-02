@@ -11,61 +11,56 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-interface Book {
-  id: number;
-  title: string;
-  author: string;
-  isbn: string;
-  stock: number;
-}
+import useSWR from "swr";
+import {
+  addInventoryReq,
+  getInventoryReq,
+  inventoryPath,
+  updateInventoryReq,
+} from "@/apis/book";
+import { useToast } from "@/hooks/use-toast";
+import { Loader } from "@/app/components/Loader";
 
 export default function InventoryManagement() {
-  const [books, setBooks] = useState<Book[]>([]);
+  const { toast } = useToast();
   const [newBook, setNewBook] = useState({
     title: "",
     author: "",
     isbn: "",
     stock: 0,
   });
+  const {
+    data: books,
+    isLoading,
+    mutate,
+  } = useSWR(inventoryPath, () => getInventoryReq());
+  const [tempStocks, setTempStocks] = useState<Record<number, number>>({});
 
-  useEffect(() => {
-    // Fetch books from API
-    // For now, we'll use mock data
-    setBooks([
-      {
-        id: 1,
-        title: "The Great Gatsby",
-        author: "F. Scott Fitzgerald",
-        isbn: "9780743273565",
-        stock: 50,
-      },
-      {
-        id: 2,
-        title: "To Kill a Mockingbird",
-        author: "Harper Lee",
-        isbn: "9780446310789",
-        stock: 30,
-      },
-    ]);
-  }, []);
-
-  const handleAddBook = () => {
-    // Add book to API
-    // For now, we'll just add it to the local state
-    setBooks([...books, { ...newBook, id: books.length + 1 }]);
+  const handleAddBook = async () => {
+    await addInventoryReq(newBook);
+    toast({ title: "Success", description: "New book added!" });
+    mutate();
     setNewBook({ title: "", author: "", isbn: "", stock: 0 });
   };
 
-  const handleUpdateStock = (id: number, newStock: number) => {
-    // Update stock in API
-    // For now, we'll just update the local state
-    setBooks(
-      books.map((book) =>
-        book.id === id ? { ...book, stock: newStock } : book
-      )
-    );
+  const handleUpdateStock = async (id: number) => {
+    const newStock = tempStocks[id];
+    if (newStock === undefined) {
+      return;
+    }
+    await updateInventoryReq(id, newStock);
+    toast({ title: "Success", description: "Inventory updated!" });
+    setTempStocks((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    mutate();
   };
+
+  if (isLoading) {
+    return <Loader />;
+  }
 
   return (
     <div className="container mx-auto p-4">
@@ -112,7 +107,7 @@ export default function InventoryManagement() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {books.map((book) => (
+          {books?.map((book) => (
             <TableRow key={book.id}>
               <TableCell>{book.title}</TableCell>
               <TableCell>{book.author}</TableCell>
@@ -121,13 +116,22 @@ export default function InventoryManagement() {
               <TableCell className="flex gap-2">
                 <Input
                   type="number"
-                  value={book.stock}
-                  onChange={(e) =>
-                    handleUpdateStock(book.id, parseInt(e.target.value))
-                  }
+                  value={tempStocks[book.id] ?? book.stock}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 0;
+                    setTempStocks((prev) => ({
+                      ...prev,
+                      [book.id]: value,
+                    }));
+                  }}
                   className="w-20 mr-2"
                 />
-                <Button onClick={() => handleUpdateStock(book.id, book.stock)}>
+                <Button
+                  onClick={() => handleUpdateStock(book.id)}
+                  disabled={
+                    tempStocks[book.id] === undefined ||
+                    tempStocks[book.id] === book.stock
+                  }>
                   Update
                 </Button>
               </TableCell>

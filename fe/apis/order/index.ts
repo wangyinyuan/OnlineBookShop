@@ -1,8 +1,10 @@
 import { request } from "../index";
+import { Order } from "@/types/order";
 
 export const getOrdersPath = "/orders";
 export const createOrderPath = "/orders";
 export const getOrderDetailsPath = (orderId: number) => `/orders/${orderId}`;
+export const getAllOrdersPath = "/orders/all";
 
 export const getOrdersReq = () => {
   return request({
@@ -24,3 +26,18 @@ export const getOrderDetailsReq = (orderId: number) => {
     method: "GET",
   });
 };
+
+export function getAllOrdersReq() {
+  return request<Order[]>({
+    method: "GET",
+    url: getAllOrdersPath,
+  });
+}
+
+export function updateOrderStatusReq(orderId: number, status: string) {
+  return request<void>({
+    method: "PUT",
+    url: `/orders/${orderId}/status`,
+    data: { status },
+  });
+}

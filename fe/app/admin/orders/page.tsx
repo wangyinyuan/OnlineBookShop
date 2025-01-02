@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -10,48 +10,50 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-interface Order {
-  id: number;
-  customerName: string;
-  orderDate: string;
-  totalAmount: number;
-  status: string;
-}
+import { useToast } from "@/hooks/use-toast";
+import useSWR from "swr";
+import {
+  getAllOrdersPath,
+  getAllOrdersReq,
+  updateOrderStatusReq,
+} from "@/apis/order";
+import { Loader } from "@/app/components/Loader";
 
 export default function OrderManagement() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const { toast } = useToast();
+  const [tempStatus, setTempStatus] = useState<Record<number, string>>({});
 
-  useEffect(() => {
-    // Fetch orders from API
-    // For now, we'll use mock data
-    setOrders([
-      {
-        id: 1,
-        customerName: "John Doe",
-        orderDate: "2023-06-01",
-        totalAmount: 59.99,
-        status: "Shipped",
-      },
-      {
-        id: 2,
-        customerName: "Jane Smith",
-        orderDate: "2023-06-02",
-        totalAmount: 39.99,
-        status: "Processing",
-      },
-    ]);
-  }, []);
+  const {
+    data: orders,
+    isLoading,
+    mutate,
+  } = useSWR(getAllOrdersPath, () => getAllOrdersReq());
 
-  const handleUpdateStatus = (id: number, newStatus: string) => {
-    // Update status in API
-    // For now, we'll just update the local state
-    setOrders(
-      orders.map((order) =>
-        order.id === id ? { ...order, status: newStatus } : order
-      )
-    );
+  const handleUpdateStatus = async (id: number) => {
+    const newStatus = tempStatus[id];
+    if (!newStatus || newStatus === orders?.find((o) => o.id === id)?.status) {
+      return;
+    }
+
+    try {
+      await updateOrderStatusReq(id, newStatus);
+      toast({ title: "Success", description: "Order status updated!" });
+      setTempStatus((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      mutate();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update order status",
+        variant: "destructive",
+      });
+    }
   };
+
+  if (isLoading) return <Loader />;
 
   return (
     <div className="container mx-auto p-4">
@@ -69,7 +71,7 @@ export default function OrderManagement() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {orders.map((order) => (
+          {orders?.map((order) => (
             <TableRow key={order.id}>
               <TableCell>{order.id}</TableCell>
               <TableCell>{order.customerName}</TableCell>
@@ -78,15 +80,24 @@ export default function OrderManagement() {
               <TableCell>{order.status}</TableCell>
               <TableCell>
                 <select
-                  value={order.status}
-                  onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
+                  value={tempStatus[order.id] ?? order.status}
+                  onChange={(e) =>
+                    setTempStatus((prev) => ({
+                      ...prev,
+                      [order.id]: e.target.value,
+                    }))
+                  }
                   className="mr-2 p-2 border rounded">
                   <option value="Processing">Processing</option>
                   <option value="Shipped">Shipped</option>
                   <option value="Delivered">Delivered</option>
                 </select>
                 <Button
-                  onClick={() => handleUpdateStatus(order.id, order.status)}>
+                  onClick={() => handleUpdateStatus(order.id)}
+                  disabled={
+                    !tempStatus[order.id] ||
+                    tempStatus[order.id] === order.status
+                  }>
                   Update
                 </Button>
               </TableCell>
