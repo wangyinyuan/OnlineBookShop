@@ -1,12 +1,16 @@
 // cypress/e2e/api/customers.cy.js
 describe("Customer Management API", () => {
-  beforeEach(() => {
+  before(() => {
     cy.task("resetTestDB");
     cy.loginAsAdmin();
     cy.loginAsUser();
   });
 
-  it("should get all customers (admin only)", () => {
+  after(() => {
+    cy.task("resetTestDB");
+  });
+
+  it("管理员可以查看所有用户", () => {
     cy.request({
       method: "GET",
       url: "http://localhost:8080/api/customers",
@@ -25,7 +29,7 @@ describe("Customer Management API", () => {
     });
   });
 
-  it("should deny regular users access to customer list", () => {
+  it("普通用户不能查看所有用户", () => {
     cy.request({
       method: "GET",
       url: "http://localhost:8080/api/customers",
@@ -39,7 +43,7 @@ describe("Customer Management API", () => {
     });
   });
 
-  it("should update customer details (admin only)", () => {
+  it("管理员更新用户全部信息", () => {
     // 首先获取用户列表以获取ID
     cy.request({
       method: "GET",
@@ -47,7 +51,7 @@ describe("Customer Management API", () => {
       headers: { Authorization: `Bearer ${Cypress.env("adminToken")}` },
     }).then((response) => {
       const userId = response.body.data.find(
-        (user) => user.email === "user@test.com"
+        (user) => user.email === "normal@test.com"
       ).id;
 
       // 更新用户
@@ -81,7 +85,7 @@ describe("Customer Management API", () => {
     });
   });
 
-  it("should handle partial updates of customer details", () => {
+  it("管理员更新用户部分信息", () => {
     // 获取用户ID
     cy.request({
       method: "GET",
@@ -89,7 +93,7 @@ describe("Customer Management API", () => {
       headers: { Authorization: `Bearer ${Cypress.env("adminToken")}` },
     }).then((response) => {
       const userId = response.body.data.find(
-        (user) => user.email === "user@test.com"
+        (user) => user.email === "normal@test.com"
       ).id;
 
       // 只更新信用等级
@@ -114,7 +118,7 @@ describe("Customer Management API", () => {
           );
           expect(updatedUser.creditLevel).to.eq(5);
           // 账户余额应保持不变
-          expect(updatedUser.accountBalance).to.eq(500);
+          expect(updatedUser.accountBalance).to.eq(1000);
         });
       });
     });

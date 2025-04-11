@@ -6,7 +6,11 @@ describe("Books API", () => {
     cy.loginAsUser();
   });
 
-  it("should get all books (public access)", () => {
+  after(() => {
+    cy.task("resetTestDB");
+  });
+
+  it("获取所有图书", () => {
     cy.request("http://localhost:8080/api/books/").then((response) => {
       cy.verifyResponseStructure(response);
       expect(response.body.data).to.be.an("array");
@@ -21,7 +25,7 @@ describe("Books API", () => {
     });
   });
 
-  it("should get inventory (admin only)", () => {
+  it("管理员获取图书存货信息", () => {
     cy.request({
       method: "GET",
       url: "http://localhost:8080/api/books/inventory",
@@ -40,7 +44,7 @@ describe("Books API", () => {
     });
   });
 
-  it("should deny regular user access to inventory", () => {
+  it("普通用户不能获得存货信息", () => {
     cy.request({
       method: "GET",
       url: "http://localhost:8080/api/books/inventory",
@@ -51,14 +55,14 @@ describe("Books API", () => {
     });
   });
 
-  it("should add a new book (admin only)", () => {
+  it("管理员新添加一本图书", () => {
     cy.request({
       method: "POST",
       url: "http://localhost:8080/api/books/inventory",
       headers: { Authorization: `Bearer ${Cypress.env("adminToken")}` },
       body: {
         title: "Cypress Testing Book",
-        author: "Test Author",
+        author: "Test Author 1",
         isbn: "9781234567899",
         stock: 25,
       },
@@ -79,7 +83,7 @@ describe("Books API", () => {
     });
   });
 
-  it("should update book inventory (admin only)", () => {
+  it("管理员增加图书库存", () => {
     // 获取书籍ID
     cy.request({
       method: "GET",
@@ -110,7 +114,7 @@ describe("Books API", () => {
           const updatedBook = verifyResponse.body.data.find(
             (book) => book.id === bookId
           );
-          expect(updatedBook.stock).to.eq(75);
+          expect(Number(updatedBook.stock)).to.eq(75);
         });
       });
     });

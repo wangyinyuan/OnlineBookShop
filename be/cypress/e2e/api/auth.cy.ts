@@ -4,6 +4,10 @@ describe("Authentication API", () => {
     cy.task("resetTestDB");
   });
 
+  after(() => {
+    cy.task("resetTestDB");
+  });
+
   const newUser = {
     email: "newuser@test.com",
     password: "test",
