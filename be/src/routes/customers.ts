@@ -75,6 +75,8 @@ router.post("/login", async (req, res) => {
     const customer = rows[0];
     const isValidPassword = await bcrypt.compare(password, customer.PASSWORD);
 
+    // console.log(await bcrypt.hash(password, 10));
+
     if (!isValidPassword) {
       return res.status(400).send(getResResult(400, "Invalid password"));
     }

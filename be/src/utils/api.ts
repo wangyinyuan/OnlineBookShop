@@ -15,6 +15,11 @@ interface TokenPayload {
   email: string;
 }
 
-export const generateToken = (payload: TokenPayload): string => {
-  return jwt.sign(payload, SECRET_KEY, { expiresIn: TOKEN_EXPIRE_TIME });
+export const generateToken = (
+  payload: TokenPayload,
+  expires?: string
+): string => {
+  return jwt.sign(payload, SECRET_KEY, {
+    expiresIn: expires ?? TOKEN_EXPIRE_TIME,
+  });
 };
