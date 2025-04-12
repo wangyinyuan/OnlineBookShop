@@ -1,23 +1,26 @@
 // cypress/e2e/api/orders.cy.js
 describe("Orders API", () => {
-  beforeEach(() => {
+  before(() => {
     cy.task("resetTestDB");
     cy.loginAsAdmin();
-    cy.loginAsUser();
-
-    // 添加商品到购物车以便创建订单
-    cy.request({
-      method: "POST",
-      url: "http://localhost:8080/api/carts/add",
-      headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
-      body: {
-        bookId: 100, // 测试书籍ID
-        quantity: 2,
-      },
+    cy.loginAsUser().then(() => {
+      cy.request({
+        method: "POST",
+        url: "http://localhost:8080/api/carts/add",
+        headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
+        body: {
+          bookId: 1,
+          quantity: 2,
+        },
+      });
     });
   });
 
-  it("should create an order from cart (authenticated user)", () => {
+  after(() => {
+    cy.task("resetTestDB");
+  });
+
+  it("从购物车创建订单", () => {
     cy.request({
       method: "POST",
       url: "http://localhost:8080/api/orders",
@@ -42,15 +45,7 @@ describe("Orders API", () => {
     });
   });
 
-  it("should get user orders", () => {
-    // 先创建订单
-    cy.request({
-      method: "POST",
-      url: "http://localhost:8080/api/orders",
-      headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
-    });
-
-    // 获取用户订单
+  it("获取用户订单", () => {
     cy.request({
       method: "GET",
       url: "http://localhost:8080/api/orders",
@@ -68,45 +63,31 @@ describe("Orders API", () => {
     });
   });
 
-  it("should get order details", () => {
-    // 先创建订单
-    cy.request({
-      method: "POST",
-      url: "http://localhost:8080/api/orders",
-      headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
-    }).then((createResponse) => {
-      const orderId = createResponse.body.data.orderId;
+  it("获取订单详情", () => {
+    const orderId = Cypress.env("testOrderId");
 
-      // 获取订单详情
-      cy.request({
-        method: "GET",
-        url: `http://localhost:8080/api/orders/${orderId}`,
-        headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
-      }).then((response) => {
-        cy.verifyResponseStructure(response);
-        expect(response.body.data).to.be.an("array");
-        expect(response.body.data.length).to.be.at.least(1);
-        expect(response.body.data[0]).to.include.keys(
-          "order_id",
-          "order_date",
-          "status",
-          "book_id",
-          "title",
-          "quantity",
-          "price"
-        );
-      });
+    // 获取订单详情
+    cy.request({
+      method: "GET",
+      url: `http://localhost:8080/api/orders/${orderId}`,
+      headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
+    }).then((response) => {
+      cy.verifyResponseStructure(response);
+      expect(response.body.data).to.be.an("array");
+      expect(response.body.data.length).to.be.at.least(1);
+      expect(response.body.data[0]).to.include.keys(
+        "order_id",
+        "order_date",
+        "status",
+        "book_id",
+        "title",
+        "quantity",
+        "price"
+      );
     });
   });
 
-  it("should get all orders (admin only)", () => {
-    // 先创建订单
-    cy.request({
-      method: "POST",
-      url: "http://localhost:8080/api/orders",
-      headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
-    });
-
+  it("管理员获取全部订单", () => {
     cy.request({
       method: "GET",
       url: "http://localhost:8080/api/orders/all",
@@ -125,7 +106,7 @@ describe("Orders API", () => {
     });
   });
 
-  it("should deny regular users access to all orders", () => {
+  it("普通用户不能获取全部订单", () => {
     cy.request({
       method: "GET",
       url: "http://localhost:8080/api/orders/all",
@@ -136,40 +117,33 @@ describe("Orders API", () => {
     });
   });
 
-  it("should update order status (admin only)", () => {
-    // 先创建订单
+  it("管理员更新订单状态", () => {
+    const orderId = Cypress.env("testOrderId");
+
+    // 更新订单状态
     cy.request({
-      method: "POST",
-      url: "http://localhost:8080/api/orders",
-      headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
-    }).then((createResponse) => {
-      const orderId = createResponse.body.data.orderId;
+      method: "PUT",
+      url: `http://localhost:8080/api/orders/${orderId}/status`,
+      headers: { Authorization: `Bearer ${Cypress.env("adminToken")}` },
+      body: {
+        status: "Shipped",
+      },
+    }).then((response) => {
+      cy.verifyResponseStructure(response);
+      expect(response.body.message).to.include(
+        "Order status updated successfully"
+      );
 
-      // 更新订单状态
+      // 验证订单状态是否更新
       cy.request({
-        method: "PUT",
-        url: `http://localhost:8080/api/orders/${orderId}/status`,
+        method: "GET",
+        url: "http://localhost:8080/api/orders/all",
         headers: { Authorization: `Bearer ${Cypress.env("adminToken")}` },
-        body: {
-          status: "Shipped",
-        },
-      }).then((response) => {
-        cy.verifyResponseStructure(response);
-        expect(response.body.message).to.include(
-          "Order status updated successfully"
+      }).then((verifyResponse) => {
+        const updatedOrder = verifyResponse.body.data.find(
+          (order) => order.id === orderId
         );
-
-        // 验证订单状态是否更新
-        cy.request({
-          method: "GET",
-          url: "http://localhost:8080/api/orders/all",
-          headers: { Authorization: `Bearer ${Cypress.env("adminToken")}` },
-        }).then((verifyResponse) => {
-          const updatedOrder = verifyResponse.body.data.find(
-            (order) => order.id === orderId
-          );
-          expect(updatedOrder.status).to.eq("Shipped");
-        });
+        expect(updatedOrder.status).to.eq("Shipped");
       });
     });
   });

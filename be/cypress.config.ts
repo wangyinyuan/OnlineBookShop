@@ -2,6 +2,7 @@ import { defineConfig } from "cypress";
 import dbPlugin from "./cypress/plugins";
 
 export default defineConfig({
+  projectId: 'g8j64j',
   e2e: {
     setupNodeEvents(on, config) {
       return dbPlugin(on, config);

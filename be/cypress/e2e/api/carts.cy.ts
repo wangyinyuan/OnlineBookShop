@@ -1,11 +1,15 @@
 // cypress/e2e/api/carts.cy.js
 describe("Shopping Cart API", () => {
-  beforeEach(() => {
+  before(() => {
     cy.task("resetTestDB");
     cy.loginAsUser();
   });
 
-  it("should start with empty cart", () => {
+  after(() => {
+    cy.task("resetTestDB");
+  });
+
+  it("初始购物车为空", () => {
     cy.request({
       method: "GET",
       url: "http://localhost:8080/api/carts",
@@ -18,13 +22,13 @@ describe("Shopping Cart API", () => {
     });
   });
 
-  it("should add item to cart", () => {
+  it("购物车添加物品", () => {
     cy.request({
       method: "POST",
       url: "http://localhost:8080/api/carts/add",
       headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
       body: {
-        bookId: 100, // 测试书籍ID
+        bookId: 1,
         quantity: 3,
       },
     }).then((response) => {
@@ -38,22 +42,21 @@ describe("Shopping Cart API", () => {
         headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
       }).then((cartResponse) => {
         expect(cartResponse.body.data.items).to.have.length(1);
-        expect(cartResponse.body.data.items[0].book_id).to.eq(100);
+        expect(cartResponse.body.data.items[0].book_id).to.eq(1);
         expect(cartResponse.body.data.items[0].quantity).to.eq(3);
 
-        // 保存cart_id用于后续测试
         Cypress.env("testCartItemId", cartResponse.body.data.items[0].cart_id);
       });
     });
   });
 
-  it("should increase quantity when adding existing item", () => {
+  it("添加重复商品数量正确增加", () => {
     // 先添加一个商品
     cy.request({
       method: "POST",
       url: "http://localhost:8080/api/carts/add",
       headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
-      body: { bookId: 100, quantity: 2 },
+      body: { bookId: 1, quantity: 2 },
     });
 
     // 再添加同一个商品
@@ -61,26 +64,25 @@ describe("Shopping Cart API", () => {
       method: "POST",
       url: "http://localhost:8080/api/carts/add",
       headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
-      body: { bookId: 100, quantity: 3 },
+      body: { bookId: 1, quantity: 3 },
     });
 
-    // 验证数量是否累加
     cy.request({
       method: "GET",
       url: "http://localhost:8080/api/carts",
       headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
     }).then((response) => {
       expect(response.body.data.items).to.have.length(1);
-      expect(response.body.data.items[0].quantity).to.eq(5);
+      expect(response.body.data.items[0].quantity).to.eq(8); // 前一个用例添加了 3，所以总共是 2 + 3 + 3
     });
   });
 
-  it("should reject adding non-existent book", () => {
+  it("不能添加不存在的书", () => {
     cy.request({
       method: "POST",
       url: "http://localhost:8080/api/carts/add",
       headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
-      body: { bookId: 9999, quantity: 1 },
+      body: { bookId: 999, quantity: 1 },
       failOnStatusCode: false,
     }).then((response) => {
       cy.verifyResponseStructure(response, 400);
@@ -88,15 +90,7 @@ describe("Shopping Cart API", () => {
     });
   });
 
-  it("should update cart item quantity", () => {
-    // 先添加商品
-    cy.request({
-      method: "POST",
-      url: "http://localhost:8080/api/carts/add",
-      headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
-      body: { bookId: 100, quantity: 2 },
-    });
-
+  it("更新购物车商品数量", () => {
     // 获取购物车项ID
     cy.request({
       method: "GET",
@@ -127,15 +121,7 @@ describe("Shopping Cart API", () => {
     });
   });
 
-  it("should remove item from cart", () => {
-    // 先添加商品
-    cy.request({
-      method: "POST",
-      url: "http://localhost:8080/api/carts/add",
-      headers: { Authorization: `Bearer ${Cypress.env("userToken")}` },
-      body: { bookId: 100, quantity: 1 },
-    });
-
+  it("购物车删除商品", () => {
     // 获取购物车项ID
     cy.request({
       method: "GET",

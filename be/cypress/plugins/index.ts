@@ -18,6 +18,11 @@ export default function (on, config) {
           TRUNCATE TABLE Inventory;
           TRUNCATE TABLE Author;
           TRUNCATE TABLE Book_Author;
+          TRUNCATE TABLE Supplier;
+          TRUNCATE TABLE Purchase_Order;
+          TRUNCATE TABLE Shopping_Cart;
+          TRUNCATE TABLE Order_Item;
+          TRUNCATE TABLE \`Order\`;
 
           -- 插入测试账户
           INSERT INTO Customer (email, password, name, is_admin, credit_level, account_balance)
@@ -43,6 +48,17 @@ export default function (on, config) {
             (1, 'Test Author 1'),
             (2, 'Test Author 2');
 
+          -- 插入供应商
+          INSERT INTO Supplier (name, contact_info)
+          VALUES
+            ('Test Supplier 1', 'contact1@test.com'),
+            ('Test Supplier 2', 'contact2@test.com');
+
+          -- 插入购书订单
+          INSERT INTO Purchase_Order (supplier_id, book_id, quantity, status)
+          VALUES
+            (1, 1, 10, 'Pending'),
+            (2, 2, 5, 'Completed');
           
         `);
 

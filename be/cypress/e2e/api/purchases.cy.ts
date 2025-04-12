@@ -1,12 +1,16 @@
 // cypress/e2e/api/purchases.cy.js
 describe("Purchase Orders API", () => {
-  beforeEach(() => {
+  before(() => {
     cy.task("resetTestDB");
     cy.loginAsAdmin();
     cy.loginAsUser();
   });
 
-  it("should get purchase orders (admin only)", () => {
+  after(() => {
+    cy.task("resetTestDB");
+  });
+
+  it("管理员获取图书购买订单", () => {
     cy.request({
       method: "GET",
       url: "http://localhost:8080/api/books/purchase-orders",
@@ -29,7 +33,7 @@ describe("Purchase Orders API", () => {
     });
   });
 
-  it("should deny regular users access to purchase orders", () => {
+  it("普通用户不能获取图书购买订单", () => {
     cy.request({
       method: "GET",
       url: "http://localhost:8080/api/books/purchase-orders",
@@ -40,7 +44,7 @@ describe("Purchase Orders API", () => {
     });
   });
 
-  it("should create a new purchase order (admin only)", () => {
+  it("管理员创建新的图书购买订单", () => {
     cy.request({
       method: "POST",
       url: "http://localhost:8080/api/books/purchase-orders",
@@ -74,7 +78,7 @@ describe("Purchase Orders API", () => {
     });
   });
 
-  it("should handle invalid supplier or book in purchase order", () => {
+  it("供应商不存在", () => {
     cy.request({
       method: "POST",
       url: "http://localhost:8080/api/books/purchase-orders",
@@ -91,51 +95,55 @@ describe("Purchase Orders API", () => {
     });
   });
 
-  it("should update purchase order status (admin only)", () => {
-    // 首先创建一个订单
+  it("图书不存在", () => {
     cy.request({
       method: "POST",
       url: "http://localhost:8080/api/books/purchase-orders",
       headers: { Authorization: `Bearer ${Cypress.env("adminToken")}` },
       body: {
         supplier: "Test Supplier 1",
-        book: "Test Book 1",
+        book: "Non-Existent Book",
         quantity: 5,
       },
-    }).then(() => {
-      // 获取订单列表
+      failOnStatusCode: false,
+    }).then((response) => {
+      cy.verifyResponseStructure(response, 500);
+      expect(response.body.message).to.include("Book not found");
+    });
+  });
+
+  it("管理员更新订单状态", () => {
+    cy.request({
+      method: "GET",
+      url: "http://localhost:8080/api/books/purchase-orders",
+      headers: { Authorization: `Bearer ${Cypress.env("adminToken")}` },
+    }).then((response) => {
+      const orderId = response.body.data[0].id;
+
+      // 更新订单状态
       cy.request({
-        method: "GET",
-        url: "http://localhost:8080/api/books/purchase-orders",
+        method: "PUT",
+        url: `http://localhost:8080/api/books/purchase-orders/${orderId}`,
         headers: { Authorization: `Bearer ${Cypress.env("adminToken")}` },
-      }).then((response) => {
-        const orderId = response.body.data[0].id;
+        body: {
+          status: "Delivered",
+        },
+      }).then((updateResponse) => {
+        cy.verifyResponseStructure(updateResponse);
+        expect(updateResponse.body.message).to.include(
+          "Order status updated successfully"
+        );
 
-        // 更新订单状态
+        // 验证状态是否被更新
         cy.request({
-          method: "PUT",
-          url: `http://localhost:8080/api/books/purchase-orders/${orderId}`,
+          method: "GET",
+          url: "http://localhost:8080/api/books/purchase-orders",
           headers: { Authorization: `Bearer ${Cypress.env("adminToken")}` },
-          body: {
-            status: "Delivered",
-          },
-        }).then((updateResponse) => {
-          cy.verifyResponseStructure(updateResponse);
-          expect(updateResponse.body.message).to.include(
-            "Order status updated successfully"
+        }).then((verifyResponse) => {
+          const updatedOrder = verifyResponse.body.data.find(
+            (order) => order.id === orderId
           );
-
-          // 验证状态是否被更新
-          cy.request({
-            method: "GET",
-            url: "http://localhost:8080/api/books/purchase-orders",
-            headers: { Authorization: `Bearer ${Cypress.env("adminToken")}` },
-          }).then((verifyResponse) => {
-            const updatedOrder = verifyResponse.body.data.find(
-              (order) => order.id === orderId
-            );
-            expect(updatedOrder.status).to.eq("Delivered");
-          });
+          expect(updatedOrder.status).to.eq("Delivered");
         });
       });
     });
